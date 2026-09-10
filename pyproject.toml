@@ -1,0 +1,18 @@
+[project]
+name = "plotlib"
+version = "0.1.0"
+description = "Fast matplotlib-compatible plotting library (Pillow + numpy)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["numpy", "pillow"]
+optional-dependencies = { dev = ["matplotlib", "pytest"] }
+
+[build-system]
+requires = ["setuptools"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["plotlib*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
