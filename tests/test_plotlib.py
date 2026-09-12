@@ -2,7 +2,7 @@ import numpy as np
 
 
 def test_plot_save(tmp_path):
-    import plotlib as pl
+    import plotlibs as pl
     pl.close()
     pl.plot([1, 2, 3], [1, 4, 9], label="x^2")
     pl.xlabel("x"); pl.ylabel("y"); pl.legend(); pl.grid(True)
@@ -12,7 +12,7 @@ def test_plot_save(tmp_path):
 
 
 def test_subplots_scatter_bar_hist():
-    import plotlib as pl
+    import plotlibs as pl
     pl.close()
     fig, axs = pl.subplots(2, 2)
     axs[0, 0].plot(np.arange(10), np.arange(10) ** 2)
@@ -24,7 +24,7 @@ def test_subplots_scatter_bar_hist():
 
 
 def test_big_data_decimation():
-    from plotlib.fast import decimate
+    from plotlibs.fast import decimate
     x = np.linspace(0, 10, 200_000)
     y = np.sin(x)
     xd, yd = decimate(x, y)
@@ -34,7 +34,7 @@ def test_big_data_decimation():
 
 
 def test_matplotlib_compat_signatures():
-    import plotlib as pl
+    import plotlibs as pl
     pl.close()
     pl.plot([1, 2], [3, 4], "ro--", label="fmt")
     pl.scatter([1, 2], [3, 4], c="red")

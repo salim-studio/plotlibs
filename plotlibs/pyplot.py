@@ -1,4 +1,4 @@
-"""plotlib.pyplot — matplotlib.pyplot-compatible state machine, faster."""
+"""plotlibs.pyplot — matplotlib.pyplot-compatible state machine, faster."""
 from __future__ import annotations
 
 from . import style
@@ -101,6 +101,55 @@ def axvline(*args, **kw):
 
 def text(x, y, s, **kw):
     return gca().text(x, y, s, **kw)
+
+
+def boxplot(*args, **kw):
+    return gca().boxplot(*args, **kw)
+
+
+def violinplot(*args, **kw):
+    return gca().violinplot(*args, **kw)
+
+
+def kde(*args, **kw):
+    return gca().kde(*args, **kw)
+
+
+density = kde
+
+
+def heatmap(*args, **kw):
+    return gca().heatmap(*args, **kw)
+
+
+def corr(*args, **kw):
+    return gca().corr(*args, **kw)
+
+
+def corrcoef(*args, **kw):
+    return gca().corr(*args, **kw)
+
+
+def countplot(*args, **kw):
+    return gca().countplot(*args, **kw)
+
+
+count = countplot
+
+
+def area(*args, **kw):
+    return gca().area(*args, **kw)
+
+
+stackplot = area
+
+
+def hist2d(*args, **kw):
+    return gca().hist2d(*args, **kw)
+
+
+def stem(*args, **kw):
+    return gca().stem(*args, **kw)
 
 
 def xlim(*args, **kw):

@@ -1,18 +1,49 @@
 [project]
-name = "plotlib"
-version = "0.1.0"
-description = "Fast matplotlib-compatible plotting library (Pillow + numpy)"
+name = "plotlibs"
+version = "0.3.0"
+description = "plotlibs — fast, beautiful, matplotlib-compatible plotting with DataFrames, SQL, EDA and ML/DL visuals (numpy + Pillow only)"
 readme = "README.md"
 requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "salim-studio" }]
+keywords = ["plotting", "matplotlib", "visualization", "dataframe", "sql", "eda", "machine-learning", "deep-learning", "pandas"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Visualization",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Database",
+]
 dependencies = ["numpy", "pillow"]
-optional-dependencies = { dev = ["matplotlib", "pytest"] }
+
+[project.optional-dependencies]
+data = ["pandas>=1.5", "pyarrow>=10"]
+db = ["sqlalchemy>=2.0", "duckdb>=0.8"]
+ml = ["scikit-learn>=1.0", "pandas>=1.5"]
+all = ["pandas>=1.5", "pyarrow>=10", "sqlalchemy>=2.0", "duckdb>=0.8", "scikit-learn>=1.0", "matplotlib>=3.5"]
+dev = ["matplotlib", "pytest", "pandas", "scikit-learn"]
+
+[project.urls]
+Homepage = "https://github.com/salim-studio/plotlibs"
+Repository = "https://github.com/salim-studio/plotlibs"
+Issues = "https://github.com/salim-studio/plotlibs/issues"
+Documentation = "https://github.com/salim-studio/plotlibs#readme"
+Changelog = "https://github.com/salim-studio/plotlibs/blob/main/CHANGELOG.md"
 
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["plotlib*"]
+include = ["plotlibs*", "plotlib*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

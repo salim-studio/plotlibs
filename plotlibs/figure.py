@@ -1,4 +1,4 @@
-"""plotlib.figure — Figure + Axes with matplotlib-compatible API.
+"""plotlibs.figure — Figure + Axes with matplotlib-compatible API.
 
 Speed design:
 - artists are plain dicts (no heavy objects)
@@ -35,6 +35,13 @@ class Axes:
         self.texts: list[dict] = []
         self._hlines: list[dict] = []
         self._vlines: list[dict] = []
+        # --- stats / EDA / ML artists (جديد 0.2.0) ---
+        self.boxes: list[dict] = []
+        self.violins: list[dict] = []
+        self.kdes: list[dict] = []
+        self.heatmaps: list[dict] = []
+        self.areas: list[dict] = []
+        self.stems: list[dict] = []
         self._color_idx = 0
         self._xlim = None
         self._ylim = None
@@ -240,6 +247,142 @@ class Axes:
         self.texts.append(t)
         return t
 
+    # ---------- stats / EDA (جديد — لجعل المكتبة مشهورة عند المحللين) ----------
+    def boxplot(self, data, labels=None, color=None, **kw):
+        """boxplot(list of arrays). متوافق مع matplotlib."""
+        if isinstance(data, np.ndarray) and data.ndim == 2:
+            cols = [data[:, i] for i in range(data.shape[1])]
+        elif isinstance(data, (list, tuple)) and data and np.ndim(data[0]) == 0:
+            cols = [np.asarray(data, dtype=float)]
+        else:
+            try:
+                cols = [np.asarray(c, dtype=float).ravel() for c in data]
+            except Exception:
+                cols = [np.asarray(data, dtype=float).ravel()]
+        b = dict(cols=cols, labels=list(labels) if labels is not None else None,
+                 color=self._next_color(color))
+        self.boxes.append(b)
+        return b
+
+    def violinplot(self, data, labels=None, color=None, points=120, **kw):
+        if isinstance(data, np.ndarray) and data.ndim == 2:
+            cols = [data[:, i] for i in range(data.shape[1])]
+        else:
+            try:
+                cols = [np.asarray(c, dtype=float).ravel() for c in data]
+            except Exception:
+                cols = [np.asarray(data, dtype=float).ravel()]
+        v = dict(cols=cols, labels=list(labels) if labels is not None else None,
+                 color=self._next_color(color), points=int(points))
+        self.violins.append(v)
+        return v
+
+    def kde(self, data, color=None, label="", fill=True, bw=None, **kw):
+        """منحنى الكثافة KDE (بديل seaborn.kdeplot)."""
+        from .fast import gaussian_kde_1d
+        v = np.asarray(data, dtype=float).ravel()
+        xs, ys = gaussian_kde_1d(v, bw=bw) if v.size else (np.array([0, 1]), np.zeros(2))
+        k = dict(x=xs, y=ys, color=self._next_color(color), label=label,
+                 fill=bool(fill))
+        self.kdes.append(k)
+        if label:
+            self._legend_labels.append(label)
+        return k
+
+    density = kde
+
+    def heatmap(self, matrix, xticks=None, yticks=None, annot=False, cmap="viridis",
+                vmin=None, vmax=None, **kw):
+        m = np.asarray(matrix, dtype=float)
+        h = dict(data=m, xticks=list(xticks) if xticks is not None else None,
+                 yticks=list(yticks) if yticks is not None else None,
+                 annot=bool(annot), cmap=cmap, vmin=vmin, vmax=vmax)
+        self.heatmaps.append(h)
+        return h
+
+    def corr(self, data, cols=None, annot=True, cmap="viridis", **kw):
+        """مصفوفة ارتباط جاهزة من DataFrame/dict مباشرة."""
+        from .data import corr_matrix
+        if isinstance(data, np.ndarray):
+            m = np.asarray(data, dtype=float)
+            c = np.corrcoef(m, rowvar=False) if m.ndim == 2 else np.eye(1)
+            labels = cols or [f"c{i}" for i in range(c.shape[0])]
+            return self.heatmap(np.nan_to_num(c), xticks=labels, yticks=labels,
+                                annot=annot, cmap=cmap)
+        c, labels = corr_matrix(data, cols)
+        return self.heatmap(c, xticks=labels, yticks=labels, annot=annot, cmap=cmap,
+                            vmin=-1, vmax=1)
+
+    def corrcoef(self, *a, **k):
+        return self.corr(*a, **k)
+
+    def countplot(self, values, color=None, label="", **kw):
+        """رسم تكرار الفئات (بديل seaborn.countplot)."""
+        vals = np.asarray(values).ravel()
+        uniq, counts = np.unique(vals, return_counts=True)
+        order = np.argsort(-counts, kind="stable")
+        uniq, counts = uniq[order], counts[order]
+        xpos = np.arange(len(uniq), dtype=float)
+        b = dict(x=xpos, h=counts.astype(float), w=np.full(len(uniq), 0.6),
+                 bottom=np.zeros(len(uniq)), color=self._next_color(color),
+                 label=label, alpha=1.0, horizontal=False)
+        self.bars.append(b)
+        try:
+            self._xticklabels = [str(v) for v in uniq]
+            self._xtickpos = xpos
+        except Exception:
+            pass
+        if label:
+            self._legend_labels.append(label)
+        return b
+
+    count = countplot
+
+    def area(self, x, *ys, labels=None, colors=None, alpha=0.5, **kw):
+        """منحنى مساحي مكدّس (stackplot)."""
+        x = np.asarray(x, dtype=float).ravel()
+        arrs = [np.asarray(y, dtype=float).ravel()[: x.size] for y in ys]
+        a = dict(x=x, ys=arrs,
+                 labels=list(labels) if labels is not None else [""] * len(arrs),
+                 colors=list(colors) if colors is not None else [self._next_color(None) for _ in arrs],
+                 alpha=float(alpha))
+        self.areas.append(a)
+        for lb in a["labels"]:
+            if lb:
+                self._legend_labels.append(lb)
+        return a
+
+    stackplot = area
+
+    def hist2d(self, x, y, bins=30, cmap="viridis", **kw):
+        """كثافة ثنائية الأبعاد (بديل plt.hist2d)."""
+        x = np.asarray(x, dtype=float).ravel()
+        y = np.asarray(y, dtype=float).ravel()
+        n = min(x.size, y.size)
+        H, xe, ye = np.histogram2d(x[:n], y[:n], bins=bins)
+        h = dict(data=H.T, xticks=None, yticks=None, annot=False, cmap=cmap,
+                 vmin=None, vmax=None, extent=(xe[0], xe[-1], ye[0], ye[-1]))
+        self.heatmaps.append(h)
+        return H, xe, ye, h
+
+    def stem(self, x, y=None, color=None, label="", **kw):
+        if y is None:
+            y = np.asarray(x, dtype=float).ravel()
+            x = np.arange(y.size, dtype=float)
+        s = dict(x=np.asarray(x, dtype=float).ravel(),
+                 y=np.asarray(y, dtype=float).ravel(),
+                 color=self._next_color(color), label=label)
+        self.stems.append(s)
+        if label:
+            self._legend_labels.append(label)
+        return s
+
+    def table(self, data, col_labels=None, row_labels=None, **kw):
+        t = dict(kind="table")
+        self.texts.append(dict(x=0.5, y=-0.05, s=f"[table {np.asarray(data).shape}]",
+                               fontsize=9, color="black", data_coords=False))
+        return t
+
     # ---------- cosmetics, matplotlib-compatible ----------
     def set_xlim(self, left=None, right=None):
         l, r = self.get_xlim()
@@ -312,6 +455,33 @@ class Axes:
             else:
                 d = im["data"]
                 upd([0, d.shape[1]] if axis == "x" else [0, d.shape[0]])
+        for k in self.kdes:
+            upd(k["x"] if axis == "x" else k["y"])
+        for b in self.boxes + self.violins:
+            if axis == "x":
+                upd([1, len(b["cols"])])
+            else:
+                for c in b["cols"]:
+                    upd(c)
+        for hm in self.heatmaps:
+            d = np.asarray(hm["data"])
+            if axis == "x":
+                upd([0, d.shape[1]])
+            else:
+                upd([0, d.shape[0]])
+        for a in self.areas:
+            if axis == "x":
+                upd(a["x"])
+            else:
+                if a["ys"]:
+                    try:
+                        upd(np.sum(np.stack([np.asarray(v, dtype=float) for v in a["ys"]]), axis=0))
+                        for v in a["ys"]:
+                            upd(v)
+                    except Exception:
+                        pass
+        for s in self.stems:
+            upd(s["x"] if axis == "x" else s["y"])
         if not np.isfinite(lo):
             return (0.0, 1.0)
         a, bb = nice_limits(lo, hi)

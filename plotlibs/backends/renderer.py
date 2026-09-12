@@ -1,4 +1,4 @@
-"""plotlib.backends.renderer — Pillow-based fast raster renderer."""
+"""plotlibs.backends.renderer — Pillow-based fast raster renderer."""
 from __future__ import annotations
 
 import io
@@ -117,31 +117,77 @@ def _draw_axes(img: Image.Image, draw: ImageDraw.ImageDraw, ax, W, H):
             gy = int(y1 - (t - ylim[0]) / ((ylim[1] - ylim[0]) or 1) * (y1 - y0))
             draw.line([(x0, gy), (x1, gy)], fill=(210, 210, 210), width=1)
 
-    # images (imshow) first
-    for im in ax.images:
+    # images (imshow) first + heatmaps (جديد: corr/heatmap/hist2d)
+    for im in list(ax.images) + [dict(data=h["data"], cmap=h.get("cmap", "viridis"),
+                                      vmin=h.get("vmin"), vmax=h.get("vmax"),
+                                      origin="upper", extent=h.get("extent"))
+                                 for h in getattr(ax, "heatmaps", [])]:
         data = im["data"]
         try:
-            if data.ndim == 2:
+            if np.asarray(data).ndim == 2:
+                data = np.asarray(data, dtype=float)
                 vmin = im["vmin"] if im["vmin"] is not None else float(np.nanmin(data))
                 vmax = im["vmax"] if im["vmax"] is not None else float(np.nanmax(data))
                 norm = (data - vmin) / ((vmax - vmin) or 1.0)
                 norm = np.clip(norm, 0, 1)
+                cmap = im.get("cmap", "viridis")
                 hh, ww = norm.shape
                 rgb = np.empty((hh, ww, 3), dtype=np.uint8)
-                # fast vectorized viridis-approx
-                rgb[..., 0] = (68 + norm * 185).astype(np.uint8)
-                rgb[..., 1] = (1 + norm * 230).astype(np.uint8)
-                rgb[..., 2] = (84 - norm * 47).astype(np.uint8)
-                pil = Image.fromarray(rgb)
+                if cmap in ("gray", "grey", "binary", "gist_yarg", "Greys"):
+                    v = (norm * 255).astype(np.uint8)
+                    rgb[..., 0] = v; rgb[..., 1] = v; rgb[..., 2] = v
+                elif cmap in ("hot",):
+                    rgb[..., 0] = (norm * 255).astype(np.uint8)
+                    rgb[..., 1] = ((norm ** 2) * 255).astype(np.uint8)
+                    rgb[..., 2] = ((norm ** 3) * 128).astype(np.uint8)
+                elif cmap in ("cool", "jet", "hsv", "rainbow", "plasma", "inferno", "magma"):
+                    t = norm
+                    rgb[..., 0] = (255 * np.clip(1.5 - np.abs(4 * t - 3), 0, 1)).astype(np.uint8)
+                    rgb[..., 1] = (255 * np.clip(1.5 - np.abs(4 * t - 2), 0, 1)).astype(np.uint8)
+                    rgb[..., 2] = (255 * np.clip(1.5 - np.abs(4 * t - 1), 0, 1)).astype(np.uint8)
+                elif cmap in ("RdBu", "RdBu_r", "coolwarm", "bwr", "seismic"):
+                    # أحمر-أزرق للارتباط: -1 أحمر ... +1 أزرق
+                    t = np.clip(norm, 0, 1)
+                    rgb[..., 0] = (255 * (1 - t)).astype(np.uint8)
+                    rgb[..., 1] = (255 * (1 - np.abs(2 * t - 1))).astype(np.uint8)
+                    rgb[..., 2] = (255 * t).astype(np.uint8)
+                else:  # viridis approx
+                    rgb[..., 0] = (68 + norm * 185).astype(np.uint8)
+                    rgb[..., 1] = (1 + norm * 230).astype(np.uint8)
+                    rgb[..., 2] = (84 - norm * 47).astype(np.uint8)
+                pil = Image.fromarray(rgb, "RGB")
             else:
                 a = np.asarray(data)
                 if a.dtype != np.uint8:
-                    a = np.clip(a, 0, 255).astype(np.uint8) if a.max() > 1 else (a * 255).astype(np.uint8)
+                    a = np.clip(a, 0, 255).astype(np.uint8) if np.nanmax(a) > 1 else (a * 255).astype(np.uint8)
                 pil = Image.fromarray(a)
-            if im["origin"] == "upper":
+            if im.get("origin", "upper") == "upper":
                 pil = pil.transpose(Image.FLIP_TOP_BOTTOM)
             pil = pil.resize((max(1, x1 - x0), max(1, y1 - y0)), Image.BILINEAR)
             img.paste(pil, (x0, y0))
+        except Exception:
+            pass
+    # heatmap annotations + labels
+    for h in getattr(ax, "heatmaps", []):
+        try:
+            m = np.asarray(h["data"], dtype=float)
+            nr, nc = m.shape
+            if h.get("annot") and nr <= 14 and nc <= 14:
+                for i in range(nr):
+                    for j in range(nc):
+                        # خلية (j,i) -> بكسل
+                        cx = int(x0 + (j + 0.5) / nc * (x1 - x0))
+                        cy = int(y0 + (i + 0.5) / nr * (y1 - y0))
+                        draw.text((cx - 12, cy - 7), f"{m[nr - 1 - i, j]:.2f}",
+                                  fill=(255, 255, 255), font=_font(8))
+            if h.get("xticks") and nc == len(h["xticks"]):
+                for j, lab in enumerate(h["xticks"]):
+                    cx = int(x0 + (j + 0.5) / nc * (x1 - x0))
+                    draw.text((cx - 12, y1 + 5), str(lab)[:10], fill=(0, 0, 0), font=_font(8))
+            if h.get("yticks") and nr == len(h["yticks"]):
+                for i, lab in enumerate(h["yticks"]):
+                    cy = int(y0 + (i + 0.5) / nr * (y1 - y0))
+                    draw.text((max(2, x0 - 52), cy - 7), str(lab)[:10], fill=(0, 0, 0), font=_font(8))
         except Exception:
             pass
 
@@ -186,6 +232,123 @@ def _draw_axes(img: Image.Image, draw: ImageDraw.ImageDraw, ax, W, H):
         for i, cnt in enumerate(hh["counts"]):
             _rect_from_data(float(hh["edges"][i]), 0.0, float(hh["edges"][i + 1]), float(cnt), c)
 
+    # stacked area (جديد)
+    for a in getattr(ax, "areas", []):
+        try:
+            xs = np.asarray(a["x"], dtype=float)
+            px_base, _ = _data_to_px(xs, np.zeros_like(xs), xlim, ylim, box)
+            cumul = np.zeros_like(xs, dtype=float)
+            for j, yj in enumerate(a["ys"]):
+                yj = np.asarray(yj, dtype=float)[: len(xs)]
+                prev = cumul.copy()
+                cumul = cumul + yj
+                c = _parse_color(a["colors"][j] if j < len(a["colors"]) else (79, 70, 229))
+                _, py_top = _data_to_px(xs, cumul, xlim, ylim, box)
+                _, py_bot = _data_to_px(xs, prev, xlim, ylim, box)
+                poly = list(zip(px_base.astype(int), py_top.astype(int))) + \
+                    list(zip(px_base.astype(int)[::-1], py_bot.astype(int)[::-1]))
+                if len(poly) >= 3:
+                    draw.polygon(poly, fill=c)
+                if len(px_base):
+                    draw.line(list(zip(px_base.astype(int), py_top.astype(int))), fill=tuple(max(0, v - 50) for v in c), width=2)
+        except Exception:
+            pass
+
+    # KDE curves (جديد)
+    for k in getattr(ax, "kdes", []):
+        try:
+            c = _parse_color(k["color"])
+            px, py = _data_to_px(k["x"], k["y"], xlim, ylim, box)
+            px = np.clip(px, x0 - 50, x1 + 50)
+            py = np.clip(py, y0 - 50, y1 + 50)
+            if k.get("fill"):
+                _, py0 = _data_to_px(k["x"], np.zeros_like(k["y"]), xlim, ylim, box)
+                poly = list(zip(px.astype(int), py.astype(int))) + \
+                    list(zip(px.astype(int)[::-1], py0.astype(int)[::-1]))
+                if len(poly) >= 3:
+                    draw.polygon(poly, fill=c + (90,) if len(c) == 3 else c)
+            _draw_line(draw, px, py, c, 2.0, "-", None, 6)
+        except Exception:
+            pass
+
+    # stems (جديد)
+    for s in getattr(ax, "stems", []):
+        try:
+            c = _parse_color(s["color"])
+            px, py = _data_to_px(s["x"], s["y"], xlim, ylim, box)
+            _, py0 = _data_to_px(s["x"], np.zeros_like(s["y"]), xlim, ylim, box)
+            for i in range(len(px)):
+                draw.line([(int(px[i]), int(py0[i])), (int(px[i]), int(py[i]))], fill=c, width=1)
+                draw.ellipse([int(px[i]) - 3, int(py[i]) - 3, int(px[i]) + 3, int(py[i]) + 3], fill=c)
+        except Exception:
+            pass
+
+    # boxplots (جديد)
+    for bg in getattr(ax, "boxes", []):
+        try:
+            from ..fast import box_stats
+            n = len(bg["cols"])
+            base_c = _parse_color(bg["color"])
+            for i, col in enumerate(bg["cols"]):
+                st = box_stats(np.asarray(col, dtype=float))
+                pos = float(i + 1)
+                pxx, _ = _data_to_px([pos], [0], xlim, ylim, box)
+                cx = int(pxx[0])
+                _, pyy = _data_to_px([0, 0, 0, 0, 0],
+                                     [st["lo"], st["q1"], st["med"], st["q3"], st["hi"]],
+                                     xlim, ylim, box)
+                y_lo, y_q1, y_med, y_q3, y_hi = [int(v) for v in pyy]
+                wpx = max(14, int((x1 - x0) / max(n * 3, 1)))
+                # whiskers
+                draw.line([(cx, y_lo), (cx, y_hi)], fill=(60, 60, 60), width=1)
+                draw.line([(cx - wpx // 3, y_lo), (cx + wpx // 3, y_lo)], fill=(60, 60, 60), width=1)
+                draw.line([(cx - wpx // 3, y_hi), (cx + wpx // 3, y_hi)], fill=(60, 60, 60), width=1)
+                # box q1-q3
+                draw.rectangle([cx - wpx // 2, min(y_q1, y_q3), cx + wpx // 2, max(y_q1, y_q3)],
+                               fill=base_c, outline=(20, 20, 20))
+                draw.line([(cx - wpx // 2, y_med), (cx + wpx // 2, y_med)], fill=(255, 255, 255), width=2)
+                # mean
+                _, pymean = _data_to_px([0], [st["mean"]], xlim, ylim, box)
+                draw.ellipse([cx - 3, int(pymean[0]) - 3, cx + 3, int(pymean[0]) + 3], fill=(0, 0, 0))
+                # outliers
+                if st["out"].size:
+                    _, pyo = _data_to_px(np.zeros_like(st["out"]), st["out"], xlim, ylim, box)
+                    for yo in pyo:
+                        draw.ellipse([cx - 2, int(yo) - 2, cx + 2, int(yo) + 2], outline=(120, 120, 120))
+                if bg.get("labels") and i < len(bg["labels"]):
+                    draw.text((cx - 14, y1 + 5), str(bg["labels"][i])[:12], fill=(0, 0, 0), font=_font(8))
+        except Exception:
+            pass
+
+    # violins (جديد: KDE عمودي مرسوم كمرآة)
+    for vg in getattr(ax, "violins", []):
+        try:
+            from ..fast import gaussian_kde_1d
+            n = len(vg["cols"])
+            base_c = _parse_color(vg["color"])
+            for i, col in enumerate(vg["cols"]):
+                v = np.asarray(col, dtype=float)
+                v = v[np.isfinite(v)]
+                if v.size < 3:
+                    continue
+                pos = float(i + 1)
+                pxx, _ = _data_to_px([pos], [0], xlim, ylim, box)
+                cx = int(pxx[0])
+                xs, ys = gaussian_kde_1d(v, points=int(vg.get("points", 120)))
+                _, pyy = _data_to_px(np.zeros_like(ys), ys if False else xs, xlim, ylim, box)
+                # ys هنا كثافة -> عرض أفقي
+                mx = ys.max() or 1.0
+                wpx = max(18, int((x1 - x0) / max(n * 2.5, 1)))
+                half = (ys / mx * (wpx / 2)).astype(int)
+                right = [(cx + int(h), int(p)) for h, p in zip(half, pyy)]
+                left = [(cx - int(h), int(p)) for h, p in zip(half[::-1], pyy[::-1])]
+                if len(right) + len(left) >= 6:
+                    draw.polygon(right + left, fill=base_c, outline=(20, 20, 20))
+                if vg.get("labels") and i < len(vg["labels"]):
+                    draw.text((cx - 14, y1 + 5), str(vg["labels"][i])[:12], fill=(0, 0, 0), font=_font(8))
+        except Exception:
+            pass
+
     # lines (decimated — speedup core)
     for ln in ax._rendered_lines():
         c = _parse_color(ln["color"])
@@ -223,7 +386,7 @@ def _draw_axes(img: Image.Image, draw: ImageDraw.ImageDraw, ax, W, H):
             xi, yi = int(px[i]), int(py[i])
             if not (x0 - 20 <= xi <= x1 + 20 and y0 - 20 <= yi <= y1 + 20):
                 continue
-            cc = base if single else (_parse_color(cols[i]) if i < len(cols) else (31, 119, 180))
+            cc = base if single else (_parse_color(cols[i]) if i < len(cols) else (79, 70, 229))
             rr = r if r is not None else max(1, int(math.sqrt(float(np.asarray(s).ravel()[i])) / 2))
             draw.ellipse([xi - rr, yi - rr, xi + rr, yi + rr], fill=cc, outline=cc)
 
@@ -245,7 +408,7 @@ def _draw_axes(img: Image.Image, draw: ImageDraw.ImageDraw, ax, W, H):
         cols = p["colors"]
         for i, fr in enumerate(p["fracs"]):
             sweep = float(fr) * 360
-            cc = _parse_color(cols[i]) if cols and i < len(cols) else [(31, 119, 180), (255, 127, 14), (44, 160, 44), (214, 39, 40)][i % 4]
+            cc = _parse_color(cols[i]) if cols and i < len(cols) else [(79, 70, 229), (255, 127, 14), (44, 160, 44), (214, 39, 40)][i % 4]
             draw.pieslice([cx - rr, cy - rr, cx + rr, cy + rr], start=ang, end=ang + sweep, fill=cc,
                           outline=(255, 255, 255))
             ang += sweep
@@ -254,15 +417,28 @@ def _draw_axes(img: Image.Image, draw: ImageDraw.ImageDraw, ax, W, H):
     edge = _parse_color(rcParams.get("axes.edgecolor", "black"))
     draw.rectangle(box, outline=edge, width=1)
 
-    # ticks + labels
+    # ticks + labels (مع دعم التسميات الفئوية من bar/count)
     fs = int(rcParams.get("xtick.labelsize", 9))
     font = _font(fs)
-    for t in nice_ticks(xlim[0], xlim[1]):
-        if not (xlim[0] <= t <= xlim[1]):
-            continue
-        gx = int(x0 + (t - xlim[0]) / ((xlim[1] - xlim[0]) or 1) * (x1 - x0))
-        draw.line([(gx, y1), (gx, y1 + 4)], fill=(0, 0, 0), width=1)
-        draw.text((gx - 10, y1 + 5), fmt_tick(t), fill=(0, 0, 0), font=font)
+    cat_labels = getattr(ax, "_xticklabels", None)
+    cat_pos = getattr(ax, "_xtickpos", None)
+    if cat_labels is not None and cat_pos is not None and len(cat_labels):
+        try:
+            for p, lab in zip(np.asarray(cat_pos, dtype=float), cat_labels):
+                if not (xlim[0] - 1 <= p <= xlim[1] + 1):
+                    continue
+                gx = int(x0 + (p - xlim[0]) / ((xlim[1] - xlim[0]) or 1) * (x1 - x0))
+                draw.line([(gx, y1), (gx, y1 + 4)], fill=(0, 0, 0), width=1)
+                draw.text((gx - 12, y1 + 5), str(lab)[:12], fill=(0, 0, 0), font=font)
+        except Exception:
+            pass
+    else:
+        for t in nice_ticks(xlim[0], xlim[1]):
+            if not (xlim[0] <= t <= xlim[1]):
+                continue
+            gx = int(x0 + (t - xlim[0]) / ((xlim[1] - xlim[0]) or 1) * (x1 - x0))
+            draw.line([(gx, y1), (gx, y1 + 4)], fill=(0, 0, 0), width=1)
+            draw.text((gx - 10, y1 + 5), fmt_tick(t), fill=(0, 0, 0), font=font)
     for t in nice_ticks(ylim[0], ylim[1]):
         if not (ylim[0] <= t <= ylim[1]):
             continue
@@ -281,8 +457,13 @@ def _draw_axes(img: Image.Image, draw: ImageDraw.ImageDraw, ax, W, H):
 
     # legend (fast, top-right)
     labels = [(ln.get("label"), _parse_color(ln["color"])) for ln in ax.lines if ln.get("label")]
-    labels += [(s.get("label"), _parse_color(s["colors"]) if isinstance(s["colors"], tuple) else (31, 119, 180))
+    labels += [(s.get("label"), _parse_color(s["colors"]) if isinstance(s["colors"], tuple) else (79, 70, 229))
                for s in ax.scatters if s.get("label")]
+    labels += [(k.get("label"), _parse_color(k["color"])) for k in getattr(ax, "kdes", []) if k.get("label")]
+    for a in getattr(ax, "areas", []):
+        for lb, cc in zip(a.get("labels", []), a.get("colors", [])):
+            if lb:
+                labels.append((lb, _parse_color(cc)))
     if labels:
         lx1, ly1 = x1 - 8, y0 + 8
         lw_box, lh = 110, 18 * len(labels) + 10

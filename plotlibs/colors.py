@@ -1,4 +1,4 @@
-"""plotlib.colors — fast matplotlib-compatible color parsing."""
+"""plotlibs.colors — fast matplotlib-compatible color parsing."""
 from __future__ import annotations
 
 TABLEAU = {
@@ -28,13 +28,38 @@ NAMED = {
     "lightgray": (211, 211, 211), "lightgrey": (211, 211, 211),
 }
 
-CYCLE = [TABLEAU[f"C{i}"] for i in range(10)]
+BRAND = {
+    # plotlibs visual identity v1 (see assets/logo.svg)
+    "primary": (79, 70, 229),      # #4F46E5 indigo
+    "accent": (6, 182, 212),       # #06B6D4 cyan
+    "ink": (15, 23, 42),           # #0F172A
+    "paper": (248, 250, 252),      # #F8FAFC
+    "lime": (163, 230, 53),        # #A3E635
+    "amber": (250, 204, 21),       # #FACC15
+    "coral": (251, 113, 133),      # #FB7185
+    "violet": (167, 139, 250),     # #A78BFA
+    "sky": (56, 189, 248),         # #38BDF8
+    "slate": (100, 116, 139),      # #64748B
+}
+
+CYCLE = [
+    BRAND["primary"],
+    BRAND["accent"],
+    BRAND["coral"],
+    (34, 197, 94),
+    BRAND["amber"],
+    BRAND["violet"],
+    BRAND["sky"],
+    BRAND["slate"],
+    (244, 114, 182),
+    (45, 212, 191),
+]
 
 
 def to_rgb(color) -> tuple[int, int, int]:
     """Parse any matplotlib-like color spec to (r, g, b) 0-255."""
     if color is None:
-        return TABLEAU["C0"]
+        return BRAND["primary"]
     if isinstance(color, (tuple, list)):
         vals = list(color)
         if len(vals) in (3, 4):
