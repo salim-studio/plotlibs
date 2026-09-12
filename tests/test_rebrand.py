@@ -4,7 +4,7 @@ import warnings
 
 def test_package_name_and_version():
     import plotlibs as pl
-    assert pl.__version__ == "0.3.0"
+    assert pl.__version__ == "0.3.1"
     assert pl.__brand__ == "plotlibs"
 
 

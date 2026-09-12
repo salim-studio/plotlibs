@@ -38,7 +38,7 @@ primary → accent → coral → green → amber → violet → sky → slate �
 
 ## GitHub presentation (English)
 - README starts with banner + logo + centered title/tagline + badges.
-- Badges: version 0.3.0 (indigo), speed (cyan), deps (lime), license (amber), python (official).
+- Badges: version 0.3.1 (indigo), speed (cyan), deps (lime), license (amber), python (official).
 - Sections: Why → Install → 30-second tour → Visual identity → Compatibility → Why faster → Layout → Migration → Roadmap → Contributing → License.
 - Social preview: use `assets/banner.svg` (1280×420).
 

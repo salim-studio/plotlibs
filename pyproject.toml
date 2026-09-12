@@ -1,6 +1,6 @@
 [project]
 name = "plotlibs"
-version = "0.3.0"
+version = "0.3.1"
 description = "plotlibs — fast, beautiful, matplotlib-compatible plotting with DataFrames, SQL, EDA and ML/DL visuals (numpy + Pillow only)"
 readme = "README.md"
 requires-python = ">=3.9"

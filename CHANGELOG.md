@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 — Fix PyPI banner/logo images
+- README banner/logo now use absolute `raw.githubusercontent.com` URLs (relative `assets/...` paths don't render on PyPI).
+- Doc links (`assets/`, `BRANDING.md`, `LICENSE`) now absolute GitHub URLs for PyPI compatibility.
+- No code changes.
+
 ## 0.3.0 — Rebrand to plotlibs
 - **Renamed** package `plotlib` → `plotlibs`; new home https://github.com/salim-studio/plotlibs.
 - Backward-compatible shim `import plotlib` (DeprecationWarning, removed in 1.0).

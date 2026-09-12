@@ -32,7 +32,7 @@ from . import db as db
 from . import eda as eda
 from . import ml as ml
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __brand__ = "plotlibs"
 __all__ = ["Figure", "figure", "subplots", "plt", "pyplot", "style", "rcParams",
            "data", "db", "eda", "ml",

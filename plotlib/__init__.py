@@ -35,4 +35,4 @@ from plotlibs import (  # noqa: F401
     plot_feature_importance, figure_to_image,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
